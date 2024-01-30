@@ -1,0 +1,31 @@
+{
+  "name": "mageinic/hyva-newsletter-popup",
+    "description": "MageINIC NewsLetter Popup is a part of MageINIC NewsLetter Popup extension. This extension extends NewsLetter Popup compatibility with Hyva Theme.",
+    "type": "magento2-module",
+    "license": [
+        "OSL-3.0",
+        "AFL-3.0"
+    ],
+    "version": "1.0.0",
+    "require": {
+        "magento/framework": "*",
+        "mageinic/newsletter-popup": "1.0.*",
+        "magento/module-newsletter-graph-ql": "100.4.*",
+        "hyva-themes/magento2-compat-module-fallback": "*"
+    },
+    "authors": [
+        {
+            "name": "MageINIC",
+            "email": "support@mageinic.com",
+            "homepage": "https://www.mageinic.com"
+        }
+    ],
+  "autoload": {
+    "files": [
+      "registration.php"
+    ],
+    "psr-4": {
+      "Hyva\\MageINICNewsletterPopup\\": ""
+    }
+  }
+}

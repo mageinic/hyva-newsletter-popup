@@ -1,0 +1,185 @@
+<?php
+/**
+ * MageINIC
+ * Copyright (C) 2023. MageINIC <support@mageinic.com>
+ *
+ * NOTICE OF LICENSE
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see https://opensource.org/licenses/gpl-3.0.html.
+ *
+ * Do not edit or add to this file if you wish to upgrade this extension to newer
+ * version in the future.
+ *
+ * @category MageINIC
+ * @package MageINIC_NewsletterPopup
+ * @copyright Copyright (c) 2023. MageINIC (https://www.mageinic.com/)
+ * @license https://opensource.org/licenses/gpl-3.0.html GNU General Public License,version 3 (GPL-3.0)
+ * @author MageINIC <support@mageinic.com>
+ */
+
+use Hyva\GraphqlViewModel\ViewModel\GraphqlViewModel;
+use Hyva\Theme\ViewModel\ReCaptcha;
+use Hyva\Theme\ViewModel\Store;
+use MageINIC\NewsletterPopup\Block\NewsletterPopup;
+use Magento\Framework\Escaper;
+use Hyva\Theme\ViewModel\HeroiconsOutline;
+use Hyva\Theme\Model\ViewModelRegistry;
+use Magento\Newsletter\Block\Subscribe;
+
+/**
+ * @var NewsletterPopup $block
+ * @var Escaper $escaper
+ */
+$popSelect = $block->getPopUpSelect();
+
+/** @var Subscribe $block */
+/** @var Escaper $escaper */
+/** @var ViewModelRegistry $viewModels */
+/** @var ReCaptcha $recaptcha */
+/** @var HeroiconsOutline $heroIcons */
+/** @var GraphqlViewModel $gqlViewModel */
+
+$heroIcons = $viewModels->require(HeroiconsOutline::class);
+$gqlViewModel = $viewModels->require(GraphqlViewModel::class);
+$formId = 'newsletter-popup-submit';
+// Do not replace this with $viewModels->require(ReCaptcha::class); that might break the dependency
+// on the Magento_ReCaptchaNewsletter module
+$recaptcha = $block->getData('viewModelRecaptcha');
+
+/** @var Store $viewModelStore */
+$viewModelStore = $viewModels->require(Store::class);
+
+?>
+<?php if ($popSelect): ?>
+    <div class="pr-4">
+        <form
+            class="form popup-newsletter-subscribe"
+            action="<?= $escaper->escapeUrl($block->getFormActionUrl()) ?>"
+            method="post"
+            x-data="initNewsletterPopupForm()"
+            @submit.prevent="submitForm()"
+            id="newsletter-popup-validate-detail"
+            aria-label="<?= $escaper->escapeHtmlAttr(__('Subscribe to Newsletter')) ?>">
+            <div class="flex flex-wrap justify-center gap-2 md:justify-start">
+                <label for="newsletter-subscribe" class="sr-only">
+                    <?= $escaper->escapeHtml(__('Email Address')) ?>
+                </label>
+                <input
+                    name="email"
+                    type="email"
+                    required
+                    id="newsletter-popup-subscribe"
+                    class="form-input inline-flex w-full"
+                    placeholder="<?= $escaper->escapeHtmlAttr(__('Enter your email address')) ?>"
+                    aria-describedby="footer-newsletter-heading">
+                <?= $block->getBlockHtml('formkey') ?>
+                <?= $recaptcha ? $recaptcha->getInputHtml(ReCaptcha::RECAPTCHA_FORM_ID_NEWSLETTER) : '' ?>
+                <div class="flex items-center justify-center mt-6 w-full">
+                    <button class="inline-flex shrink-0 xl:mt-0 btn btn-primary">
+                        <?= $escaper->escapeHtml(__('Subscribe')) ?>
+                    </button>
+                </div>
+            </div>
+            <div>
+                <template x-if="displayErrorMessage">
+                    <p class="flex items-center text-red">
+                    <span class="inline-block w-8 h-8 mr-3">
+                        <?= $heroIcons->exclamationCircleHtml(); ?>
+                    </span>
+                        <template x-for="errorMessage in errorMessages">
+                            <span x-html="errorMessage"></span>
+                        </template>
+                    </p>
+                </template>
+            </div>
+            <div class="w-full">
+                <?= $recaptcha ? $recaptcha->getLegalNoticeHtml(ReCaptcha::RECAPTCHA_FORM_ID_NEWSLETTER) : '' ?>
+            </div>
+        </form>
+        <?php $newsLetterCaptcha = $recaptcha->getValidationJsHtml(ReCaptcha::RECAPTCHA_FORM_ID_NEWSLETTER) ?>
+        <script>
+            function initNewsletterPopupForm(event) {
+                return {
+                    errors: 0,
+                    hasCaptchaToken: 0,
+                    displayErrorMessage: false,
+                    errorMessages: [],
+
+                    setErrorMessages(messages) {
+                        this.errorMessages = [messages]
+                        this.displayErrorMessage = this.errorMessages.length
+                    },
+
+                    submitForm() {
+                        // Do not rename $form, the variable is expected to be declared in the recaptcha output
+                        const $form = document.querySelector('#newsletter-popup-validate-detail');
+                        <?= /* @noEscape */ $recaptcha ? $newsLetterCaptcha : '' ?>
+
+                        if (this.errors === 0) {
+                            this.subscribeNewsletter();
+                        }
+                    },
+
+                    subscribeNewsletter: function () {
+                        this.isLoading = true;
+                        this.displayErrorMessage = false;
+                        this.email = document.getElementById('newsletter-popup-subscribe').value;
+
+                        const query = `<?= /* @noEscape */
+                        $gqlViewModel->query('subscribe_email_to_newsletter_mutation', '
+                        mutation subscribeEmailToNewsletter(
+                            $email: String!
+                        ) {
+                            subscribeEmailToNewsletter(
+                                email: $email
+                            ) {
+                                status
+                            }
+                        }')
+                                        ?>`;
+
+                        const variables = {email: this.email};
+
+                        const form = document.querySelector('#<?= $escaper->escapeJs($formId) ?>');
+
+                        const fieldName = '<?= $recaptcha
+                            ? $escaper->escapeJs($recaptcha->getResultTokenFieldName($formId))
+                            : '' ?>';
+
+                        const recaptchaHeader = fieldName && form && form.elements[fieldName]
+                            ? {'X-ReCaptcha': form.elements[fieldName].value}
+                            : {};
+
+                        fetch(`${BASE_URL}graphql`, {
+                            method: 'POST',
+                            headers: Object.assign({
+                                'Content-Type': 'application/json;charset=utf-8',
+                                'Store': '<?= $escaper->escapeJs($viewModelStore->getStoreCode()) ?>'
+                            }, recaptchaHeader),
+                            credentials: 'include',
+                            body: JSON.stringify({query: query, variables: variables})
+                        })
+                            .then(response => response.json())
+                            .then(data => {
+                                    this.isLoading = false;
+                                    if (data.errors) {
+                                        this.setErrorMessages(data.errors[0].message);
+                                        this.displayErrorMessage = true;
+                                    } else {
+                                        hyva.modal().hide('mageinic-popup-modal', event)
+                                        this.displaySuccessMessage = true;
+                                    }
+                                }
+                            );
+                    }
+                }
+            }
+        </script>
+    </div>
+<?php endif; ?>
